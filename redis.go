@@ -11,8 +11,10 @@ import (
 type RedisAlgorithm string
 
 const (
-	RedisFixedWindow RedisAlgorithm = "fixed_window"
-	RedisTokenBucket RedisAlgorithm = "token_bucket"
+	RedisFixedWindow          RedisAlgorithm = "fixed_window"
+	RedisTokenBucket          RedisAlgorithm = "token_bucket"
+	RedisSlidingWindow        RedisAlgorithm = "sliding_window"
+	RedisSlidingWindowCounter RedisAlgorithm = "sliding_window_counter"
 )
 
 const defaultRedisLimiterTimeout = 50 * time.Millisecond
@@ -59,6 +61,10 @@ func (l *RedisLimiter) Allow(ctx context.Context, rule RedisRule) (bool, error) 
 	switch algorithm {
 	case RedisFixedWindow:
 		return l.allowFixedWindow(ctx, rule)
+	case RedisSlidingWindow:
+		return l.allowSlidingWindow(ctx, rule)
+	case RedisSlidingWindowCounter:
+		return l.allowSlidingWindowCounter(ctx, rule)
 	case RedisTokenBucket:
 		return l.allowTokenBucket(ctx, rule)
 	default:
@@ -103,6 +109,41 @@ func (l *RedisLimiter) allowTokenBucket(ctx context.Context, rule RedisRule) (bo
 	defer cancel()
 
 	allowed, err := redisTokenBucketScript.Run(timeoutCtx, l.client, []string{key}, burst, refillRate, nowMillis, ttlMillis).Int()
+	if err != nil {
+		return false, err
+	}
+	return allowed == 1, nil
+}
+
+func (l *RedisLimiter) allowSlidingWindow(ctx context.Context, rule RedisRule) (bool, error) {
+	windowMillis := durationMillis(rule.Window)
+	nowMillis := time.Now().UnixMilli()
+	ttlMillis := windowMillis * 2
+	key := l.prefix + ":sliding:" + rule.Key
+	seqKey := key + ":seq"
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, l.timeout)
+	defer cancel()
+
+	allowed, err := redisSlidingWindowScript.Run(timeoutCtx, l.client, []string{key, seqKey}, rule.Limit, windowMillis, nowMillis, ttlMillis).Int()
+	if err != nil {
+		return false, err
+	}
+	return allowed == 1, nil
+}
+
+func (l *RedisLimiter) allowSlidingWindowCounter(ctx context.Context, rule RedisRule) (bool, error) {
+	windowMillis := durationMillis(rule.Window)
+	nowMillis := time.Now().UnixMilli()
+	windowID := nowMillis / windowMillis
+	currentKey := l.prefix + ":sliding_counter:" + rule.Key + ":" + strconv.FormatInt(windowID, 10)
+	previousKey := l.prefix + ":sliding_counter:" + rule.Key + ":" + strconv.FormatInt(windowID-1, 10)
+	ttlMillis := windowMillis * 2
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, l.timeout)
+	defer cancel()
+
+	allowed, err := redisSlidingWindowCounterScript.Run(timeoutCtx, l.client, []string{currentKey, previousKey}, rule.Limit, windowMillis, nowMillis, ttlMillis).Int()
 	if err != nil {
 		return false, err
 	}
@@ -160,4 +201,50 @@ end
 redis.call("HSET", KEYS[1], "tokens", tokens, "timestamp", now)
 redis.call("PEXPIRE", KEYS[1], ttl)
 return allowed
+`)
+
+var redisSlidingWindowScript = redis.NewScript(`
+local limit = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
+local now = tonumber(ARGV[3])
+local ttl = tonumber(ARGV[4])
+local min_score = now - window
+
+redis.call("ZREMRANGEBYSCORE", KEYS[1], 0, min_score)
+local current = redis.call("ZCARD", KEYS[1])
+if current >= limit then
+  redis.call("PEXPIRE", KEYS[1], ttl)
+  redis.call("PEXPIRE", KEYS[2], ttl)
+  return 0
+end
+
+local seq = redis.call("INCR", KEYS[2])
+redis.call("ZADD", KEYS[1], now, tostring(now) .. "-" .. tostring(seq))
+redis.call("PEXPIRE", KEYS[1], ttl)
+redis.call("PEXPIRE", KEYS[2], ttl)
+return 1
+`)
+
+var redisSlidingWindowCounterScript = redis.NewScript(`
+local limit = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
+local now = tonumber(ARGV[3])
+local ttl = tonumber(ARGV[4])
+
+local elapsed = now % window
+local previous_weight = (window - elapsed) / window
+local current = tonumber(redis.call("GET", KEYS[1]) or "0")
+local previous = tonumber(redis.call("GET", KEYS[2]) or "0")
+local estimated = current + previous * previous_weight
+
+if estimated + 1 > limit then
+  redis.call("PEXPIRE", KEYS[1], ttl)
+  redis.call("PEXPIRE", KEYS[2], ttl)
+  return 0
+end
+
+redis.call("INCR", KEYS[1])
+redis.call("PEXPIRE", KEYS[1], ttl)
+redis.call("PEXPIRE", KEYS[2], ttl)
+return 1
 `)
