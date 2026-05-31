@@ -2,7 +2,7 @@ package ratelimit
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -16,6 +16,8 @@ const (
 )
 
 const defaultRedisLimiterTimeout = 50 * time.Millisecond
+
+const DefaultRedisLimiterPrefix = "rate_limit"
 
 type RedisRule struct {
 	Key       string
@@ -33,7 +35,7 @@ type RedisLimiter struct {
 
 func NewRedisLimiter(client *redis.Client, prefix string, timeout time.Duration) *RedisLimiter {
 	if prefix == "" {
-		prefix = "rate_limit"
+		prefix = DefaultRedisLimiterPrefix
 	}
 	if timeout <= 0 {
 		timeout = defaultRedisLimiterTimeout
@@ -67,7 +69,7 @@ func (l *RedisLimiter) Allow(ctx context.Context, rule RedisRule) (bool, error) 
 func (l *RedisLimiter) allowFixedWindow(ctx context.Context, rule RedisRule) (bool, error) {
 	windowMillis := durationMillis(rule.Window)
 	windowID := time.Now().UnixMilli() / windowMillis
-	key := fmt.Sprintf("%s:fixed:%s:%d", l.prefix, rule.Key, windowID)
+	key := l.prefix + ":fixed:" + rule.Key + ":" + strconv.FormatInt(windowID, 10)
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, l.timeout)
 	defer cancel()
@@ -95,7 +97,7 @@ func (l *RedisLimiter) allowTokenBucket(ctx context.Context, rule RedisRule) (bo
 	if ttlMillis < int64(time.Second/time.Millisecond) {
 		ttlMillis = int64(time.Second / time.Millisecond)
 	}
-	key := fmt.Sprintf("%s:bucket:%s", l.prefix, rule.Key)
+	key := l.prefix + ":bucket:" + rule.Key
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, l.timeout)
 	defer cancel()
