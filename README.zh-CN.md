@@ -2,6 +2,11 @@
 
 [English](./README.md) | **简体中文**
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/onlomk/ratelimit.svg)](https://pkg.go.dev/github.com/onlomk/ratelimit)
+[![Go Report Card](https://goreportcard.com/badge/github.com/onlomk/ratelimit)](https://goreportcard.com/report/github.com/onlomk/ratelimit)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/onlomk/ratelimit)](https://github.com/onlomk/ratelimit/blob/main/go.mod)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 面向生产环境的 Go 限流组件。`ratelimit` 提供一套小而稳定的 API，同时支持进程内内存限流和 Redis 分布式限流。
 
 它适合 API 网关、HTTP 中间件、登录保护、租户配额、SaaS 套餐、导出任务等真实生产场景，目标是让限流规则易于理解、易于维护、可安全运行。
@@ -341,6 +346,14 @@ go test -bench=. -benchmem ./...
 ```
 
 内存 benchmark 覆盖常见本地路径：令牌桶、固定窗口、滑动窗口计数器、高基数 key、并发访问。Redis 性能取决于网络延迟、Redis 部署和调用策略，因此 Redis 集成测试默认保持可选。
+
+## Examples 示例
+
+可运行示例位于 [`examples`](./examples)：
+
+- [`examples/memory`](./examples/memory)：基础进程内内存限流用法。
+- [`examples/http_middleware`](./examples/http_middleware)：生产风格 `net/http` 中间件，支持路由级策略。
+- [`examples/fallback`](./examples/fallback)：Redis 主限流器 + 内存降级兜底。
 
 ## 测试
 

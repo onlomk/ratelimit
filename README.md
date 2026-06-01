@@ -2,6 +2,11 @@
 
 **English** | [简体中文](./README.zh-CN.md)
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/onlomk/ratelimit.svg)](https://pkg.go.dev/github.com/onlomk/ratelimit)
+[![Go Report Card](https://goreportcard.com/badge/github.com/onlomk/ratelimit)](https://goreportcard.com/report/github.com/onlomk/ratelimit)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/onlomk/ratelimit)](https://github.com/onlomk/ratelimit/blob/main/go.mod)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 Production-ready rate limiting for Go services. `ratelimit` provides a small, stable API with both in-process memory limiting and Redis-backed distributed limiting.
 
 It is designed for API gateways, HTTP middleware, login protection, tenant quotas, SaaS plans, export jobs, and other production scenarios where limits must be easy to reason about and safe to operate.
@@ -341,6 +346,14 @@ go test -bench=. -benchmem ./...
 ```
 
 Memory benchmarks cover the common local paths: token bucket, fixed window, sliding window counter, and concurrent access. Redis performance depends on network latency, Redis deployment, and pipelining strategy, so Redis integration tests are kept opt-in.
+
+## Examples
+
+Runnable examples are available in [`examples`](./examples):
+
+- [`examples/memory`](./examples/memory): basic in-process limiter usage.
+- [`examples/http_middleware`](./examples/http_middleware): production-style `net/http` middleware with route-level policies.
+- [`examples/fallback`](./examples/fallback): Redis primary limiter with memory fallback.
 
 ## Tests
 
