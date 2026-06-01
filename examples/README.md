@@ -35,3 +35,19 @@ go run ./examples/fallback
 ```
 
 The fallback example can still run when Redis is unavailable because Redis errors are handled by falling back to the memory limiter.
+
+## Gin middleware
+
+Gin middleware with default rules, route-level overrides, and disabled health checks:
+
+```bash
+go run ./examples/gin
+```
+
+Then try:
+
+```bash
+curl http://127.0.0.1:8080/api/search
+curl -H "X-User-ID: 123" http://127.0.0.1:8080/api/login
+curl http://127.0.0.1:8080/health
+```

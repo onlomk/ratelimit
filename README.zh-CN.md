@@ -275,6 +275,34 @@ routeRules := map[string]RouteRule{
 
 这样业务 handler 不需要关心限流，所有规则都集中在路由层，便于审查和调整。
 
+## 更简单的路由用法
+
+多数应用可以把限流配置集中在路由层，避免在每个 handler 里手动构造 `Rule`。
+
+```go
+allowed, err := ratelimit.AllowAll(ctx, limiter, "user:123",
+	ratelimit.PerSecond(5),
+	ratelimit.PerMinute(100),
+	ratelimit.PerHour(1000).WithAlgorithm(ratelimit.SlidingWindowCounter),
+)
+```
+
+Gin 用户可以使用可选中间件包：
+
+```go
+import "github.com/onlomk/ratelimit/middleware/ginlimit"
+
+r.Use(ginlimit.New(limiter,
+	ginlimit.Default(ratelimit.PerMinute(100)),
+	ginlimit.Route("/api/login", ratelimit.PerMinute(5).WithAlgorithm(ratelimit.FixedWindow)),
+	ginlimit.Route("/api/search", ratelimit.PerSecond(10)),
+	ginlimit.Route("/api/export", ratelimit.PerHour(3).WithAlgorithm(ratelimit.SlidingWindowCounter)),
+	ginlimit.NoLimit("/health"),
+))
+```
+
+这样常见路由限流配置更直观，同时核心包仍然不绑定具体 Web 框架。
+
 ## 组合多个时间窗口
 
 有些接口需要同时限制短期突发和长期总量。例如：每秒 5 次、每分钟 100 次、每小时 1000 次。可以连续检查多条规则，任意一条失败就拒绝。
@@ -355,6 +383,7 @@ go test -bench=. -benchmem ./...
 - [`examples/memory`](./examples/memory)：基础进程内内存限流用法。
 - [`examples/http_middleware`](./examples/http_middleware)：生产风格 `net/http` 中间件，支持路由级策略。
 - [`examples/fallback`](./examples/fallback)：Redis 主限流器 + 内存降级兜底。
+- [`examples/gin`](./examples/gin)：Gin 中间件，支持默认规则和路由级覆盖。
 
 ## 项目文档
 

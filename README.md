@@ -275,6 +275,34 @@ routeRules := map[string]RouteRule{
 
 This keeps business handlers clean while making limits visible at the routing layer.
 
+## Simpler route usage with policies
+
+For most applications you can keep limit configuration at the routing layer and avoid building `Rule` manually in every handler.
+
+```go
+allowed, err := ratelimit.AllowAll(ctx, limiter, "user:123",
+	ratelimit.PerSecond(5),
+	ratelimit.PerMinute(100),
+	ratelimit.PerHour(1000).WithAlgorithm(ratelimit.SlidingWindowCounter),
+)
+```
+
+Gin users can use the optional middleware package:
+
+```go
+import "github.com/onlomk/ratelimit/middleware/ginlimit"
+
+r.Use(ginlimit.New(limiter,
+	ginlimit.Default(ratelimit.PerMinute(100)),
+	ginlimit.Route("/api/login", ratelimit.PerMinute(5).WithAlgorithm(ratelimit.FixedWindow)),
+	ginlimit.Route("/api/search", ratelimit.PerSecond(10)),
+	ginlimit.Route("/api/export", ratelimit.PerHour(3).WithAlgorithm(ratelimit.SlidingWindowCounter)),
+	ginlimit.NoLimit("/health"),
+))
+```
+
+This makes common route limits readable while the core package remains framework-agnostic.
+
 ## Combining multiple windows
 
 Some endpoints need more than one rule. For example, an endpoint may allow 5 requests per second, 100 requests per minute, and 1,000 requests per hour. Check multiple rules and reject when any one fails.
@@ -355,6 +383,7 @@ Runnable examples are available in [`examples`](./examples):
 - [`examples/memory`](./examples/memory): basic in-process limiter usage.
 - [`examples/http_middleware`](./examples/http_middleware): production-style `net/http` middleware with route-level policies.
 - [`examples/fallback`](./examples/fallback): Redis primary limiter with memory fallback.
+- [`examples/gin`](./examples/gin): Gin middleware with default rules and route-level overrides.
 
 ## Project docs
 
