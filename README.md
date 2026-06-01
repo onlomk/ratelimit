@@ -36,10 +36,14 @@ pkg 使用，也方便拆分成独立开源包。
 当前包位于项目内：
 
 ```go
-import "go-api/pkg/ratelimit"
+import "github.com/onlomk/ratelimit"
 ```
 
-如果拆分为独立开源包，只需要替换为实际 module path。
+作为独立开源包使用：
+
+```bash
+go get github.com/onlomk/ratelimit
+```
 
 Redis 后端需要 go-redis：
 
@@ -77,7 +81,7 @@ import (
 	"fmt"
 	"time"
 
-	"go-api/pkg/ratelimit"
+	"github.com/onlomk/ratelimit"
 )
 
 func main() {
@@ -113,7 +117,7 @@ import (
 	"context"
 	"time"
 
-	"go-api/pkg/ratelimit"
+	"github.com/onlomk/ratelimit"
 )
 
 func main() {
