@@ -2,40 +2,75 @@ package ratelimit
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
-type RedisAlgorithm string
+// Algorithm identifies the rate limiting algorithm used by a Limiter.
+type Algorithm string
+
+// RedisAlgorithm is kept for backward compatibility.
+type RedisAlgorithm = Algorithm
 
 const (
-	RedisFixedWindow          RedisAlgorithm = "fixed_window"
-	RedisTokenBucket          RedisAlgorithm = "token_bucket"
-	RedisSlidingWindow        RedisAlgorithm = "sliding_window"
-	RedisSlidingWindowCounter RedisAlgorithm = "sliding_window_counter"
+	FixedWindow          Algorithm = "fixed_window"
+	TokenBucket          Algorithm = "token_bucket"
+	SlidingWindow        Algorithm = "sliding_window"
+	SlidingWindowCounter Algorithm = "sliding_window_counter"
+
+	// Backward-compatible Redis-prefixed names.
+	RedisFixedWindow          = FixedWindow
+	RedisTokenBucket          = TokenBucket
+	RedisSlidingWindow        = SlidingWindow
+	RedisSlidingWindowCounter = SlidingWindowCounter
 )
 
 const defaultRedisLimiterTimeout = 50 * time.Millisecond
 
 const DefaultRedisLimiterPrefix = "rate_limit"
 
-type RedisRule struct {
+var ErrNilRedisClient = errors.New("ratelimit: nil redis client")
+
+// Rule describes a single rate limit decision.
+//
+// Empty keys, non-positive limits, or non-positive windows are treated as
+// unlimited to make optional rules easy to wire into middleware.
+type Rule struct {
 	Key       string
 	Limit     int
 	Burst     int
 	Window    time.Duration
-	Algorithm RedisAlgorithm
+	Algorithm Algorithm
+}
+
+// RedisRule is kept for backward compatibility.
+type RedisRule = Rule
+
+// Limiter is implemented by RedisLimiter and MemoryLimiter.
+type Limiter interface {
+	Allow(ctx context.Context, rule Rule) (bool, error)
 }
 
 type RedisLimiter struct {
-	client  *redis.Client
+	client  redis.Scripter
 	prefix  string
 	timeout time.Duration
 }
 
 func NewRedisLimiter(client *redis.Client, prefix string, timeout time.Duration) *RedisLimiter {
+	if client == nil {
+		return NewRedisLimiterWithClient(nil, prefix, timeout)
+	}
+	return NewRedisLimiterWithClient(client, prefix, timeout)
+}
+
+// NewRedisLimiterWithClient creates a Redis-backed limiter from any go-redis
+// client that supports script execution, including *redis.Client,
+// *redis.ClusterClient, and *redis.Ring.
+func NewRedisLimiterWithClient(client redis.Scripter, prefix string, timeout time.Duration) *RedisLimiter {
 	if prefix == "" {
 		prefix = DefaultRedisLimiterPrefix
 	}
@@ -45,34 +80,37 @@ func NewRedisLimiter(client *redis.Client, prefix string, timeout time.Duration)
 	return &RedisLimiter{client: client, prefix: prefix, timeout: timeout}
 }
 
-func (l *RedisLimiter) Allow(ctx context.Context, rule RedisRule) (bool, error) {
+func (l *RedisLimiter) Allow(ctx context.Context, rule Rule) (bool, error) {
 	if rule.Limit <= 0 || rule.Window <= 0 {
 		return true, nil
 	}
 	if rule.Key == "" {
 		return true, nil
 	}
+	if l == nil || l.client == nil {
+		return false, ErrNilRedisClient
+	}
 
 	algorithm := rule.Algorithm
 	if algorithm == "" {
-		algorithm = RedisTokenBucket
+		algorithm = TokenBucket
 	}
 
 	switch algorithm {
-	case RedisFixedWindow:
+	case FixedWindow:
 		return l.allowFixedWindow(ctx, rule)
-	case RedisSlidingWindow:
+	case SlidingWindow:
 		return l.allowSlidingWindow(ctx, rule)
-	case RedisSlidingWindowCounter:
+	case SlidingWindowCounter:
 		return l.allowSlidingWindowCounter(ctx, rule)
-	case RedisTokenBucket:
+	case TokenBucket:
 		return l.allowTokenBucket(ctx, rule)
 	default:
 		return l.allowTokenBucket(ctx, rule)
 	}
 }
 
-func (l *RedisLimiter) allowFixedWindow(ctx context.Context, rule RedisRule) (bool, error) {
+func (l *RedisLimiter) allowFixedWindow(ctx context.Context, rule Rule) (bool, error) {
 	windowMillis := durationMillis(rule.Window)
 	windowID := time.Now().UnixMilli() / windowMillis
 	key := l.prefix + ":fixed:" + rule.Key + ":" + strconv.FormatInt(windowID, 10)
@@ -87,7 +125,7 @@ func (l *RedisLimiter) allowFixedWindow(ctx context.Context, rule RedisRule) (bo
 	return allowed == 1, nil
 }
 
-func (l *RedisLimiter) allowTokenBucket(ctx context.Context, rule RedisRule) (bool, error) {
+func (l *RedisLimiter) allowTokenBucket(ctx context.Context, rule Rule) (bool, error) {
 	windowMillis := durationMillis(rule.Window)
 	burst := rule.Burst
 	if burst <= 0 {
@@ -115,7 +153,7 @@ func (l *RedisLimiter) allowTokenBucket(ctx context.Context, rule RedisRule) (bo
 	return allowed == 1, nil
 }
 
-func (l *RedisLimiter) allowSlidingWindow(ctx context.Context, rule RedisRule) (bool, error) {
+func (l *RedisLimiter) allowSlidingWindow(ctx context.Context, rule Rule) (bool, error) {
 	windowMillis := durationMillis(rule.Window)
 	nowMillis := time.Now().UnixMilli()
 	ttlMillis := windowMillis * 2
@@ -132,7 +170,7 @@ func (l *RedisLimiter) allowSlidingWindow(ctx context.Context, rule RedisRule) (
 	return allowed == 1, nil
 }
 
-func (l *RedisLimiter) allowSlidingWindowCounter(ctx context.Context, rule RedisRule) (bool, error) {
+func (l *RedisLimiter) allowSlidingWindowCounter(ctx context.Context, rule Rule) (bool, error) {
 	windowMillis := durationMillis(rule.Window)
 	nowMillis := time.Now().UnixMilli()
 	windowID := nowMillis / windowMillis
