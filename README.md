@@ -3,6 +3,7 @@
 **English** | [简体中文](./README.zh-CN.md)
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/onlomk/ratelimit.svg)](https://pkg.go.dev/github.com/onlomk/ratelimit)
+[![CI](https://github.com/onlomk/ratelimit/actions/workflows/ci.yml/badge.svg)](https://github.com/onlomk/ratelimit/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/onlomk/ratelimit)](https://goreportcard.com/report/github.com/onlomk/ratelimit)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/onlomk/ratelimit)](https://github.com/onlomk/ratelimit/blob/main/go.mod)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
@@ -354,6 +355,13 @@ Runnable examples are available in [`examples`](./examples):
 - [`examples/memory`](./examples/memory): basic in-process limiter usage.
 - [`examples/http_middleware`](./examples/http_middleware): production-style `net/http` middleware with route-level policies.
 - [`examples/fallback`](./examples/fallback): Redis primary limiter with memory fallback.
+
+## Project docs
+
+- [CHANGELOG](./CHANGELOG.md)
+- [CONTRIBUTING](./CONTRIBUTING.md)
+- [SECURITY](./SECURITY.md)
+- [CODE_OF_CONDUCT](./CODE_OF_CONDUCT.md)
 
 ## Tests
 
