@@ -366,6 +366,12 @@ Memory fallback does not share state across instances, so it should be treated a
 
 Avoid putting raw tokens, passwords, phone numbers, emails, or private data directly in keys. Hash sensitive identifiers first.
 
+When using the Gin middleware, the default key function reads `X-User-ID` before falling back to client IP. Only use that default when `X-User-ID` is set by a trusted authentication layer or upstream proxy; do not trust a header that external clients can set directly. For public traffic, prefer `WithKeyFunc` and build the key from authenticated context or a trusted identity source.
+
+Memory limiters keep per-key state in the current process until the idle TTL cleanup removes it. If attackers can create unbounded unique keys, memory usage can grow quickly and cleanup scans can briefly block limiter decisions. Normalize keys, bound key length/cardinality at the application edge, and prefer Redis for high-cardinality production traffic.
+
+Redis Cluster users can use all algorithms. Multi-key Lua scripts use Redis hash tags internally so the related keys for `SlidingWindow` and `SlidingWindowCounter` stay in the same cluster hash slot.
+
 ## Benchmarks
 
 Run benchmarks:
@@ -398,6 +404,12 @@ Run unit tests:
 
 ```bash
 go test ./...
+```
+
+Run race tests:
+
+```bash
+go test -race ./...
 ```
 
 Redis script integration tests are skipped by default. Set `RATELIMIT_REDIS_ADDR` to run them against a real Redis instance:

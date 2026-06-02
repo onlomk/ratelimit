@@ -80,6 +80,26 @@ func TestRedisLimiterNilClient(t *testing.T) {
 	}
 }
 
+func TestRedisClusterKeysShareHashTag(t *testing.T) {
+	slidingKey := redisClusterKey("rate_limit", "sliding", "client:123", "")
+	seqKey := slidingKey + ":seq"
+	if slidingKey != "rate_limit:sliding:{client:123}" {
+		t.Fatalf("unexpected sliding key: %q", slidingKey)
+	}
+	if seqKey != "rate_limit:sliding:{client:123}:seq" {
+		t.Fatalf("unexpected sequence key: %q", seqKey)
+	}
+
+	currentKey := redisClusterKey("rate_limit", "sliding_counter", "client:123", "100")
+	previousKey := redisClusterKey("rate_limit", "sliding_counter", "client:123", "99")
+	if currentKey != "rate_limit:sliding_counter:{client:123}:100" {
+		t.Fatalf("unexpected current key: %q", currentKey)
+	}
+	if previousKey != "rate_limit:sliding_counter:{client:123}:99" {
+		t.Fatalf("unexpected previous key: %q", previousKey)
+	}
+}
+
 func deleteRedisKeysByPrefix(ctx context.Context, t *testing.T, client *redis.Client, prefix string) {
 	t.Helper()
 

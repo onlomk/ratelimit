@@ -23,6 +23,7 @@ type MemoryLimiter struct {
 	mu     sync.Mutex
 	states map[string]*memoryState
 	stop   chan struct{}
+	once   sync.Once
 }
 
 type memoryState struct {
@@ -68,12 +69,9 @@ func (l *MemoryLimiter) Close() {
 	if l == nil {
 		return
 	}
-	select {
-	case <-l.stop:
-		return
-	default:
+	l.once.Do(func() {
 		close(l.stop)
-	}
+	})
 }
 
 func (l *MemoryLimiter) Allow(_ context.Context, rule Rule) (bool, error) {

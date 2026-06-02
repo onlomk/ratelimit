@@ -134,6 +134,8 @@ func WithRejectHandler(fn RejectHandler) Option {
 }
 
 func defaultKey(c *gin.Context) string {
+	// X-User-ID must come from a trusted authentication layer or upstream proxy.
+	// Do not trust this header when clients can set it directly.
 	if userID := c.GetHeader("X-User-ID"); userID != "" {
 		return "user:" + userID
 	}

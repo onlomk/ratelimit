@@ -366,6 +366,12 @@ func (l FallbackLimiter) Allow(ctx context.Context, rule ratelimit.Rule) (bool, 
 
 不要把原始 token、密码、手机号、邮箱或隐私数据直接放进 key。必要时先做哈希。
 
+使用 Gin 中间件时，默认 key 函数会优先读取 `X-User-ID`，然后才回退到客户端 IP。只有当 `X-User-ID` 由可信认证层或上游代理写入时才应使用这个默认行为；不要信任外部客户端可以直接伪造的请求头。公网流量建议通过 `WithKeyFunc` 从认证上下文或可信身份来源构造 key。
+
+内存限流器会在当前进程中保存每个 key 的状态，直到空闲 TTL 清理删除。如果攻击者可以制造无限多的唯一 key，内存占用可能快速增长，清理扫描也可能短暂阻塞限流判断。建议在应用入口规范化 key、限制 key 长度和基数；高基数生产流量优先使用 Redis。
+
+Redis Cluster 用户可以使用全部算法。涉及多个 key 的 Lua 脚本会在内部使用 Redis hash tag，确保 `SlidingWindow` 和 `SlidingWindowCounter` 的相关 key 落在同一个 cluster hash slot。
+
 ## Benchmark
 
 运行基准测试：
@@ -398,6 +404,12 @@ go test -bench=. -benchmem ./...
 
 ```bash
 go test ./...
+```
+
+运行竞态检测测试：
+
+```bash
+go test -race ./...
 ```
 
 Redis 脚本集成测试默认跳过。设置 `RATELIMIT_REDIS_ADDR` 后会连接真实 Redis 执行：

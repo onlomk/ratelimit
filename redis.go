@@ -157,7 +157,7 @@ func (l *RedisLimiter) allowSlidingWindow(ctx context.Context, rule Rule) (bool,
 	windowMillis := durationMillis(rule.Window)
 	nowMillis := time.Now().UnixMilli()
 	ttlMillis := windowMillis * 2
-	key := l.prefix + ":sliding:" + rule.Key
+	key := redisClusterKey(l.prefix, "sliding", rule.Key, "")
 	seqKey := key + ":seq"
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, l.timeout)
@@ -174,8 +174,8 @@ func (l *RedisLimiter) allowSlidingWindowCounter(ctx context.Context, rule Rule)
 	windowMillis := durationMillis(rule.Window)
 	nowMillis := time.Now().UnixMilli()
 	windowID := nowMillis / windowMillis
-	currentKey := l.prefix + ":sliding_counter:" + rule.Key + ":" + strconv.FormatInt(windowID, 10)
-	previousKey := l.prefix + ":sliding_counter:" + rule.Key + ":" + strconv.FormatInt(windowID-1, 10)
+	currentKey := redisClusterKey(l.prefix, "sliding_counter", rule.Key, strconv.FormatInt(windowID, 10))
+	previousKey := redisClusterKey(l.prefix, "sliding_counter", rule.Key, strconv.FormatInt(windowID-1, 10))
 	ttlMillis := windowMillis * 2
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, l.timeout)
@@ -194,6 +194,14 @@ func durationMillis(d time.Duration) int64 {
 		return int64(time.Second / time.Millisecond)
 	}
 	return millis
+}
+
+func redisClusterKey(prefix, namespace, key, suffix string) string {
+	base := prefix + ":" + namespace + ":{" + key + "}"
+	if suffix == "" {
+		return base
+	}
+	return base + ":" + suffix
 }
 
 var redisFixedWindowScript = redis.NewScript(`
